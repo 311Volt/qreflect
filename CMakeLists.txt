@@ -29,3 +29,5 @@ if (QREFLECT_BUILD_EXAMPLES)
         target_link_libraries(qrjson PRIVATE qreflect nlohmann_json::nlohmann_json)
     endif ()
 endif ()
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
