@@ -53,8 +53,8 @@ namespace qreflect {
 
 		template<typename MemT, typename ClassT>
 		struct class_of_mem_ptr_helper<MemT ClassT::*> {
-			using MemberType = MemT;
-			using ClassType = ClassT;
+			using member_type = MemT;
+			using class_type = ClassT;
 		};
 
 		template<typename T>
@@ -70,7 +70,11 @@ namespace qreflect {
 		concept member_ptr = std::is_member_pointer_v<T>;
 
 		template<member_ptr T>
-		using class_of_member_ptr = typename class_of_mem_ptr_helper<T>::ClassType;
+		using class_of_member_ptr = typename class_of_mem_ptr_helper<std::remove_cvref_t<T>>::class_type;
+		
+		template<member_ptr T>
+		using member_type_of_member_ptr = typename class_of_mem_ptr_helper<std::remove_cvref_t<T>>::member_type;
+
 
 		enum class member_list_type_requirement {
 			none,
@@ -94,7 +98,7 @@ namespace qreflect {
 			} else if constexpr(not std::is_same_v<no_value, std::remove_cvref_t<decltype(fields_description<T>)>>) {
 				return fields_description<T>;
 			} else {
-				throw "no field description is available for this type";
+				return no_value{};
 			}
 		}
 
@@ -105,18 +109,26 @@ namespace qreflect {
 			} else if constexpr(not std::is_same_v<no_value, std::remove_cvref_t<decltype(methods_description<T>)>>) {
 				return methods_description<T>;
 			} else {
-				throw "no method description is available for this type";
+				return no_value{};
 			}
 		}
 
 		template<typename T>
 		struct field_list {
+			using is_member_list = void;
 			static constexpr auto value = find_field_list<T>();
 		};
 
 		template<typename T>
 		struct method_list {
+			using is_member_list = void;
 			static constexpr auto value = find_method_list<T>();
+		};
+		
+		template<typename T>
+		concept member_list = requires {
+			typename T::is_member_list;
+			typename std::tuple_size<decltype(T::value)>::type;
 		};
 
 		template<auto V>
@@ -168,8 +180,13 @@ namespace qreflect {
 		consteval auto member_names_helper(std::index_sequence<Idxs...>) {
 			return std::array {member_name<std::get<Idxs>(T::value)>()...};
 		}
+		
+		template<typename T>
+		consteval auto member_names_impl() {
+			return no_value {};
+		}
 
-		template<typename ListT>
+		template<member_list ListT>
 		consteval auto member_names_impl() {
 			constexpr size_t len = std::tuple_size_v<decltype(ListT::value)>;
 			return member_names_helper<ListT>(std::make_index_sequence<len>{});
@@ -184,8 +201,11 @@ namespace qreflect {
 		consteval auto method_names() {
 			return member_names_impl<method_list<T>>();
 		}
-
-
+		
+		template<typename T>
+		consteval bool is_member_list_valid(no_value) {
+			return false;
+		}
 
 		template<typename T, typename... Ms>
 		consteval bool is_member_list_valid(const std::tuple<Ms...>&) {
@@ -228,59 +248,118 @@ namespace qreflect {
 		};
 
 		template<typename T>
-		using field_info = basic_member_list_info<T, field_list<T>>;
+		using basic_field_info = basic_member_list_info<T, field_list<T>>;
 
 		template<typename T>
-		using method_info = basic_member_list_info<T, method_list<T>>;
+		using basic_method_info = basic_member_list_info<T, method_list<T>>;
 	}
 
 	template<typename T>
-	concept has_field_info = requires
-	{
+	concept has_partial_field_info = requires {
 		/* Description must be valid - it must be an std::tuple of pointers-to-members of T */
-		requires detail::field_info<T>::is_valid;
+		requires detail::basic_field_info<T>::is_valid;
 
 		/* Description must be comprised entirely of pointers to data members (as opposed to methods) */
-		requires detail::field_info<T>::is_field_list;
+		requires detail::basic_field_info<T>::is_field_list;
+		
+		/* The description must not have duplicate entries */
+		requires detail::basic_field_info<T>::has_no_duplicates;
+	};
+	
+	template<typename T>
+	concept has_field_info = requires {
+		/* Description must exist and be valid */
+		requires has_partial_field_info<T>;
+		
+		/* T must be aggregate so that completeness checks are possible */
+		requires std::is_aggregate_v<T>;
 
 		/* If T is aggregate, the description must be complete, i.e. it must describe ALL of the aggregate's fields */
-		requires !std::is_aggregate_v<T> || detail::field_info<T>::is_complete;
-
-		/* If T is aggregate, the description must not have duplicate entries */
-		requires !std::is_aggregate_v<T> || detail::field_info<T>::has_no_duplicates;
+		requires detail::basic_field_info<T>::is_complete;
 	};
 
 	template<typename T>
-	concept has_method_info = requires
-	{
+	concept has_method_info = requires {
 		/* Description must be valid - it must be an std::tuple of pointers-to-members of T */
-		requires detail::method_info<T>::is_valid;
+		requires detail::basic_method_info<T>::is_valid;
 
 		/* Description must be comprised entirely of pointers to methods (as opposed to data members) */
-		requires detail::method_info<T>::is_method_list;
+		requires detail::basic_method_info<T>::is_method_list;
 	};
-
+	
 	template<typename T>
-	inline constexpr auto field_list_v = detail::field_info<T>::member_list;
-
-	template<typename T>
-	inline constexpr auto method_list_v = detail::method_info<T>::member_list;
-
-	template<typename T>
-	inline constexpr auto field_names_v = detail::field_info<T>::member_name_list;
-
-	template<typename T>
-	inline constexpr auto method_names_v = detail::method_info<T>::member_name_list;
-
+	concept annotation_enabled_type = requires {
+		T::template qreflect_annotation<void>;
+	};
+	
 	template<typename T>
 	inline constexpr auto type_name_v = detail::type_name<T>();
-
+	
 	template<auto V>
-		requires detail::member_ptr<decltype(V)>
-	inline constexpr auto member_annotation_v = detail::class_of_member_ptr<decltype(V)>::template qreflect_annotation<V>;
+	inline constexpr auto member_annotation_v = no_value {};
+	
+	template<auto V>
+		requires detail::member_ptr<decltype(V)> && annotation_enabled_type<detail::class_of_member_ptr<decltype(V)>>
+	inline constexpr auto member_annotation_v<V> = detail::class_of_member_ptr<decltype(V)>::template qreflect_annotation<V>;
 
 	template<typename T>
 	inline constexpr auto type_annotation_v = no_value{};
+	
+
+	template<typename T>
+	inline constexpr auto field_list_v = detail::basic_field_info<T>::member_list;
+
+	template<typename T>
+	inline constexpr auto field_names_v = detail::basic_field_info<T>::member_name_list;
+	
+	template<typename T>
+	inline constexpr size_t num_fields_v = std::tuple_size_v<decltype(field_list_v<T>)>;
+	
+	template<typename T, size_t N>
+	struct field_info {
+		static constexpr size_t index = N;
+		static constexpr auto ptr_to_member = std::get<N>(field_list_v<T>);
+		static constexpr auto name = std::get<N>(field_names_v<T>);
+		static constexpr auto annotation = member_annotation_v<ptr_to_member>;
+		using containing_type = detail::class_of_member_ptr<decltype(ptr_to_member)>;
+		using value_type = detail::member_type_of_member_ptr<decltype(ptr_to_member)>;
+	};
+	
+	template<typename T>
+	inline constexpr auto method_list_v = detail::basic_method_info<T>::member_list;
+	
+	template<typename T>
+	inline constexpr auto method_names_v = detail::basic_method_info<T>::member_name_list;
+	
+	template<typename T>
+	inline constexpr size_t num_methods_v = std::tuple_size_v<decltype(field_list_v<T>)>;
+	
+	template<typename T, size_t N>
+	struct method_info {
+		static constexpr size_t index = N;
+		static constexpr auto ptr_to_member = std::get<N>(field_list_v<T>);
+		static constexpr auto name = std::get<N>(field_names_v<T>);
+		static constexpr auto annotation = member_annotation_v<ptr_to_member>;
+		using containing_type = detail::class_of_member_ptr<decltype(ptr_to_member)>;
+		using value_type = detail::member_type_of_member_ptr<decltype(ptr_to_member)>;
+	};
+
+	
+	template<typename T, typename FnT>
+	void for_each_member_of(T&& val, FnT&& fn) {
+		using CT = std::remove_cvref_t<T>;
+		[&]<size_t... Idxs>(std::index_sequence<Idxs...>){
+			(fn(field_info<CT, Idxs>::name, val.*field_info<CT, Idxs>::ptr_to_member), ...);
+		}(std::make_index_sequence<num_fields_v<CT>>{});
+	}
+	
+	template<typename T, typename FnT>
+	void for_each_member_decl(FnT&& fn) {
+		using CT = std::remove_cvref_t<T>;
+		[&]<size_t... Idxs>(std::index_sequence<Idxs...>){
+			(fn(field_info<CT, Idxs>{}), ...);
+		}(std::make_index_sequence<num_fields_v<CT>>{});
+	}
 
 }
 

@@ -26,13 +26,14 @@ std::string sql_type_name()
 	}
 }
 
-template<qreflect::inspectable T>
+template<qreflect::has_field_info T>
 std::string create_ddl()
 {
 	std::string result;
-	result += std::format("CREATE TABLE {} (\n", qreflect::type_info<T>::name);
-	qreflect::for_each_member_decl<T>([&]<qreflect::field_info_type FieldInfoT>(){
-		result += std::format("    {} {},\n", FieldInfoT::name, sql_type_name<typename FieldInfoT::type>());
+	result += std::format("CREATE TABLE {} (\n", qreflect::type_name_v<T>);
+	qreflect::for_each_member_decl<T>([&]<typename T1, size_t Idx>(qreflect::field_info<T1, Idx> info){
+		using InfoT = decltype(info);
+		result += std::format("    {} {},\n", info.name, sql_type_name<typename InfoT::value_type>());
 	});
 	result += ");";
 	return result;
@@ -42,8 +43,12 @@ struct Table {
 	primary_key<int> id;
 	float a;
 	char b;
+	
+	static constexpr std::tuple qrefl_fields = {
+		&Table::id, &Table::a, &Table::b
+	};
 };
-QREFL_DESCRIBE(Table, id, a, b);
+static_assert(qreflect::has_field_info<Table>);
 
 int main() {
 	std::cout << create_ddl<Table>();

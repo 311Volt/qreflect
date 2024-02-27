@@ -1,6 +1,7 @@
 #include <qreflect.hpp>
 
 #include <iostream>
+#include <sstream>
 #include <string>
 
 struct Consents {
@@ -29,24 +30,35 @@ struct User {
 };
 static_assert(qreflect::has_field_info<User>);
 
-int main() {
-	for(auto& s: qreflect::field_names_v<User>) {
-		std::cout << s << "\n";
-	}
+
+template<typename T>
+	requires (not qreflect::has_field_info<T>)
+std::string to_str(const T& v, int indent = 0) {
+	std::stringstream ss;
+	ss << v;
+	return ss.str();
+}
+
+template<qreflect::has_field_info T>
+std::string to_str(const T& v, int indent = 0) {
+	std::stringstream ss;
+	ss << "\n";
+	qreflect::for_each_member_of(v, [&](const std::string_view name, auto&& value) {
+		ss << std::string(indent, ' ') << name << " = " << to_str(value, indent+2) << "\n";
+	});
+	return ss.str();
 }
 
 
-int old_main() {
-	// TODO restore
-	// User exampleUser {
-	// 	.firstName = "Gabe",
-	// 	.lastName = "Itch",
-	// 	.age = 27,
-	// 	.consents = {
-	// 		.emailContact = true,
-	// 		.phoneContact = false
-	// 	}
-	// };
-	// std::cout << to_str(exampleUser);
-	return 0;
+int main() {
+	 User exampleUser {
+	 	.firstName = "Gabe",
+	 	.lastName = "Itch",
+	 	.age = 27,
+	 	.consents = {
+	 		.emailContact = true,
+	 		.phoneContact = false
+	 	}
+	 };
+	 std::cout << to_str(exampleUser);
 }

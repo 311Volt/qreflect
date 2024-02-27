@@ -12,7 +12,7 @@ nl::json to_json(const T& value)
 	return value;
 }
 
-template<qreflect::inspectable T>
+template<qreflect::has_field_info T>
 nl::json to_json(const T& object)
 {
 	nl::json result = nl::json::object();
@@ -27,15 +27,23 @@ struct Inner {
 	std::string a;
 	int b;
 	int c;
+	
+	static constexpr std::tuple qrefl_fields = {
+		&Inner::a, &Inner::b, &Inner::c
+	};
 };
-QREFL_DESCRIBE(Inner, a, b, c);
+static_assert(qreflect::has_field_info<Inner>);
 
 struct Outer {
 	float d;
 	char e;
 	Inner f;
+	
+	static constexpr std::tuple qrefl_fields = {
+		&Outer::d, &Outer::e, &Outer::f
+	};
 };
-QREFL_DESCRIBE(Outer, d, e, f);
+static_assert(qreflect::has_field_info<Outer>);
 
 int main() {
 	Outer test = {

@@ -35,16 +35,16 @@ we may write the following at global namespace scope:
 QREFL_DESCRIBE(User, name, email, age)
 ```
 
-This macro expands to specializations of `qreflect::type_info` and `qreflect::field_info` templates,
+This macro expands to specializations of `qreflect::type_info` and `qreflect::basic_field_info` templates,
 giving us access to information about the structure:
 
 ```c++
 static_assert(qreflect::type_info<User>::name == "User");
 static_assert(qreflect::type_info<User>::num_fields == 3);
-static_assert(qreflect::field_info<User, 0>::name == "name");
-static_assert(qreflect::field_info<User, 1>::name == "email");
-static_assert(qreflect::field_info<User, 2>::name == "age");
-static_assert(std::is_same_v<int, typename qreflect::field_info<User, 2>::type>);
+static_assert(qreflect::basic_field_info<User, 0>::name == "name");
+static_assert(qreflect::basic_field_info<User, 1>::name == "email");
+static_assert(qreflect::basic_field_info<User, 2>::name == "age");
+static_assert(std::is_same_v<int, typename qreflect::basic_field_info<User, 2>::type>);
 ```
 
 Redundancy between the definition and description is unavoidable, so `qreflect` does the
@@ -208,14 +208,14 @@ struct type_info<User> {
 };
 ```
 
-### qreflect::field_info
-Given `struct User` from the previous section, the type `qreflect::field_info<User, 2>`
+### qreflect::basic_field_info
+Given `struct User` from the previous section, the type `qreflect::basic_field_info<User, 2>`
 has a definition equivalent to:
 
 ```c++
 /* namespace qreflect */
 template<>
-struct field_info<User, 2> {
+struct basic_field_info<User, 2> {
     using parent_type = User;
     using type = int;   
     static inline constexpr int index = 2; 
