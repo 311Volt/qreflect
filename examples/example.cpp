@@ -5,15 +5,26 @@
 #include <string>
 
 struct Consents {
+	QREFL_ENABLE_ANNOTATIONS();
+	
+	QREFL_ANN_BEGIN() = 48;
 	bool emailContact = false;
+	QREFL_ANN_END(&Consents::emailContact);
+	
+	QREFL_ANN_BEGIN() = 56;
 	bool phoneContact = false;
+	QREFL_ANN_END(&Consents::phoneContact);
 
 	static constexpr std::tuple qrefl_fields = {
 		&Consents::emailContact,
 		&Consents::phoneContact
 	};
 };
+
 static_assert(qreflect::has_field_info<Consents>);
+static_assert(qreflect::annotation_enabled_type<Consents>);
+
+constexpr auto xD = qreflect::field_info<Consents, 1>::annotation;
 
 struct User {
 	std::string firstName;

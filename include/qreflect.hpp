@@ -12,19 +12,31 @@
 #include <vector>
 
 #define QREFL_ENABLE_ANNOTATIONS() \
-	protected: \
-		static constexpr size_t qreflect_counter_base = __COUNTER__; \
-		template<size_t N> static constexpr auto qreflect_annotation_val = ::qreflect::no_value{}; \
-		template<auto MemPtr> static constexpr auto qreflect_annotation = ::qreflect::no_value{}; \
-	public: \
-		using qreflect_annotation_enabled_tag = void;
+	public:                           \
+        static constexpr long qreflect_counter_base = __COUNTER__; \
+		template<auto MemPtr> static constexpr auto qreflect_get_annotation() { return ::qreflect::no_value{}; } \
+		template<typename Self, long Idx> static constexpr auto qreflect_internal_get_annotation() { return ::qreflect::no_value{}; }
+
+#define QREFL_POSTFIX_HELPER(x,y) x ## _ ## y
+#define QREFL_POSTFIX(x,y)  QREFL_POSTFIX_HELPER(x,y)
+
+#define QREFL_INTERNAL_ANN_BEGIN(idx_) \
+	template<typename Self, long Idx> requires (Idx == idx_) static constexpr auto qreflect_internal_get_annotation() { \
+		return Self::QREFL_POSTFIX(qreflect_internal_annotation_val, idx_); \
+	} \
+	static constexpr auto QREFL_POSTFIX(qreflect_internal_annotation_val, idx_)
 
 #define QREFL_INTERNAL_ANN_END(memptr, idx_) \
 	static_assert((idx_ - qreflect_counter_base) % 2 == 0, "QREFL_ANN_BEGIN / QREFL_ANN_END mismatch detected"); \
-	template<> static constexpr auto qreflect_annotation<memptr> = qreflect_annotation_val<idx_ - 1>;
+	template<auto MemPtr> requires (MemPtr == memptr) \
+	static constexpr auto qreflect_get_annotation() {          \
+		return qreflect_internal_get_annotation< \
+			::qreflect::detail::class_of_member_ptr<decltype(memptr)>, idx_ - 1     \
+		>(); \
+	}
 
 #define QREFL_ANN_BEGIN() \
-	template<> static constexpr auto qreflect_annotation_val<__COUNTER__>
+	QREFL_INTERNAL_ANN_BEGIN(__COUNTER__)
 
 #define QREFL_ANN_END(memptr) \
 	QREFL_INTERNAL_ANN_END(memptr, __COUNTER__)
@@ -289,7 +301,7 @@ namespace qreflect {
 	
 	template<typename T>
 	concept annotation_enabled_type = requires {
-		T::template qreflect_annotation<void>;
+		T::template qreflect_get_annotation<no_value{}>();
 	};
 	
 	template<typename T>
@@ -300,7 +312,7 @@ namespace qreflect {
 	
 	template<auto V>
 		requires detail::member_ptr<decltype(V)> && annotation_enabled_type<detail::class_of_member_ptr<decltype(V)>>
-	inline constexpr auto member_annotation_v<V> = detail::class_of_member_ptr<decltype(V)>::template qreflect_annotation<V>;
+	inline constexpr auto member_annotation_v<V> = detail::class_of_member_ptr<decltype(V)>::template qreflect_get_annotation<V>();
 
 	template<typename T>
 	inline constexpr auto type_annotation_v = no_value{};

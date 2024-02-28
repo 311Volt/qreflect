@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 project(qreflect)
 
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_EXTENSIONS ON)
 
 add_library(qreflect INTERFACE "include/qreflect.hpp")
 target_include_directories(qreflect INTERFACE "include")
